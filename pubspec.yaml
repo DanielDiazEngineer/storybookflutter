@@ -1,0 +1,27 @@
+name: storybookapp
+description: Children's storybook app
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  audioplayers: ^6.1.0      # replaces just_audio — works on web, Android, iOS
+  #just_audio: ^0.9.40      # audio playback
+  cupertino_icons: ^1.0.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/stories/bunny_adventure/cover.jpg
+    - assets/stories/bunny_adventure/pages/
+    - assets/stories/bunny_adventure/audio/
