@@ -1,14 +1,29 @@
+// lib/screens/home_screen.dart
+
 import 'package:flutter/material.dart';
 import '../models/story.dart';
 import 'story_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  // Default language. Phase 4: load this from user's saved preference.
+  String _selectedLanguage = 'en';
+
+  static const Map<String, String> _languageLabels = {
+    'en': '🇺🇸 English',
+    'es': '🇲🇽 Español',
+  };
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFFF8F0), // warm parchment
+      backgroundColor: const Color(0xFFFFF8F0),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -20,6 +35,30 @@ class HomeScreen extends StatelessWidget {
             color: Color(0xFF3D2B1F),
           ),
         ),
+        actions: [
+          // Language picker — top right
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: DropdownButton<String>(
+              value: _selectedLanguage,
+              underline: const SizedBox(),
+              dropdownColor: const Color(0xFFFFF8F0),
+              style: const TextStyle(
+                color: Color(0xFF3D2B1F),
+                fontSize: 14,
+              ),
+              items: _languageLabels.entries.map((e) {
+                return DropdownMenuItem(
+                  value: e.key,
+                  child: Text(e.value),
+                );
+              }).toList(),
+              onChanged: (lang) {
+                if (lang != null) setState(() => _selectedLanguage = lang);
+              },
+            ),
+          ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(20),
@@ -35,7 +74,10 @@ class HomeScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 12),
-            _StoryCard(story: bundledStory),
+            _StoryCard(
+              story: bundledStory,
+              selectedLanguage: _selectedLanguage,
+            ),
           ],
         ),
       ),
@@ -43,10 +85,16 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _StoryCard extends StatelessWidget {
   final Story story;
+  final String selectedLanguage;
 
-  const _StoryCard({required this.story});
+  const _StoryCard({
+    required this.story,
+    required this.selectedLanguage,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -55,7 +103,10 @@ class _StoryCard extends StatelessWidget {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => StoryScreen(story: story),
+            builder: (_) => StoryScreen(
+              story: story,
+              selectedLanguage: selectedLanguage, // ← passed through
+            ),
           ),
         );
       },
@@ -86,11 +137,9 @@ class _StoryCard extends StatelessWidget {
                   child: const Icon(Icons.book, size: 60, color: Colors.white),
                 ),
               ),
-              // Dark gradient at bottom
+              // Gradient overlay at bottom
               Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
+                bottom: 0, left: 0, right: 0,
                 child: Container(
                   height: 80,
                   decoration: BoxDecoration(
@@ -105,29 +154,26 @@ class _StoryCard extends StatelessWidget {
                   ),
                 ),
               ),
-              // Title
+              // Title — uses localizedTitle() from new model
               Positioned(
                 bottom: 16,
                 left: 16,
                 child: Text(
-                  story.title,
+                  story.localizedTitle(selectedLanguage),
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
-                    shadows: [
-                      Shadow(color: Colors.black54, blurRadius: 4),
-                    ],
+                    shadows: [Shadow(color: Colors.black54, blurRadius: 4)],
                   ),
                 ),
               ),
-              // "FREE" badge
+              // FREE badge
               Positioned(
-                top: 12,
-                right: 12,
+                top: 12, right: 12,
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 4),
+                      horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: const Color(0xFF4CAF50),
                     borderRadius: BorderRadius.circular(20),

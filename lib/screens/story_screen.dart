@@ -1,11 +1,18 @@
+// lib/screens/story_screen.dart
+
 import 'package:flutter/material.dart';
-import 'package:audioplayers/audioplayers.dart'; // ← replaces just_audio
+import 'package:audioplayers/audioplayers.dart';
 import '../models/story.dart';
 
 class StoryScreen extends StatefulWidget {
   final Story story;
+  final String selectedLanguage; // passed from HomeScreen
 
-  const StoryScreen({super.key, required this.story});
+  const StoryScreen({
+    super.key,
+    required this.story,
+    required this.selectedLanguage,
+  });
 
   @override
   State<StoryScreen> createState() => _StoryScreenState();
@@ -14,17 +21,17 @@ class StoryScreen extends StatefulWidget {
 class _StoryScreenState extends State<StoryScreen> {
   int _currentPage = 0;
   bool _narrationEnabled = true;
-  bool _isPlaying = false;
+  late String _lang;
 
   final AudioPlayer _player = AudioPlayer();
 
   @override
   void initState() {
     super.initState();
+    _lang = widget.selectedLanguage;
 
-    // Listen for playback completion
     _player.onPlayerComplete.listen((_) {
-      if (mounted) setState(() => _isPlaying = false);
+      if (mounted) setState(() {});
     });
 
     _playCurrentPage();
@@ -40,36 +47,23 @@ class _StoryScreenState extends State<StoryScreen> {
 
   Future<void> _playCurrentPage() async {
     if (!_narrationEnabled) return;
-
     try {
-      final page = widget.story.pages[_currentPage];
+      final content = widget.story.pages[_currentPage].localized(_lang);
       await _player.stop();
-
-      // audioplayers uses the path *inside* assets/ — strip the "assets/" prefix
-      // e.g. "assets/stories/bunny_adventure/audio/page_01.mp3"
-      //   →  "stories/bunny_adventure/audio/page_01.mp3"
-      final assetPath = page.audioPath.replaceFirst('assets/', '');
-
+      final assetPath = content.audioPath.replaceFirst('assets/', '');
       await _player.play(AssetSource(assetPath));
-      if (mounted) setState(() => _isPlaying = true);
     } catch (e) {
-      // Audio file might not exist yet during dev — fail silently
       debugPrint('Audio error: $e');
     }
   }
 
   Future<void> _stopAudio() async {
     await _player.stop();
-    if (mounted) setState(() => _isPlaying = false);
   }
 
   void _toggleNarration() {
     setState(() => _narrationEnabled = !_narrationEnabled);
-    if (_narrationEnabled) {
-      _playCurrentPage();
-    } else {
-      _stopAudio();
-    }
+    _narrationEnabled ? _playCurrentPage() : _stopAudio();
   }
 
   // ── Navigation ─────────────────────────────────────────────────────────────
@@ -94,6 +88,7 @@ class _StoryScreenState extends State<StoryScreen> {
   @override
   Widget build(BuildContext context) {
     final page = widget.story.pages[_currentPage];
+    final content = page.localized(_lang);
     final isFirst = _currentPage == 0;
     final isLast = _currentPage == widget.story.pages.length - 1;
     final pageCount = widget.story.pages.length;
@@ -103,52 +98,81 @@ class _StoryScreenState extends State<StoryScreen> {
       body: SafeArea(
         child: Column(
           children: [
+
             // ── Top bar ──────────────────────────────────────────────────────
             _TopBar(
-              title: widget.story.title,
+              title: widget.story.localizedTitle(_lang),
               narrationEnabled: _narrationEnabled,
               onBack: _goBack,
               onToggleNarration: _toggleNarration,
             ),
 
-            // ── Illustration ─────────────────────────────────────────────────
+            // ── Image with overlaid nav arrows ───────────────────────────────
             Expanded(
               flex: 6,
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 400),
-                transitionBuilder: (child, animation) => FadeTransition(
-                  opacity: animation,
-                  child: child,
-                ),
-                child: Image.asset(
-                  page.imagePath,
-                  key: ValueKey(_currentPage),
-                  fit: BoxFit.contain,
-                  width: double.infinity,
-                  errorBuilder: (_, __, ___) => Container(
-                    color: const Color(0xFF1A1A2E),
-                    child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.image_not_supported,
-                              color: Colors.white38, size: 48),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Page ${_currentPage + 1} image\n(add to assets/)',
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                                color: Colors.white38, fontSize: 13),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+
+                  // Page illustration
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 400),
+                    transitionBuilder: (child, animation) =>
+                        FadeTransition(opacity: animation, child: child),
+                    child: Image.asset(
+                      page.imagePath,
+                      key: ValueKey(_currentPage),
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: double.infinity,
+                      errorBuilder: (_, __, ___) => Container(
+                        color: const Color(0xFF1A1A2E),
+                        child: Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.image_not_supported,
+                                  color: Colors.white38, size: 48),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Page ${_currentPage + 1} image\n(add to assets/)',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                    color: Colors.white38, fontSize: 13),
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
-                ),
+
+                  // Left arrow — overlaid on image, vertically centered
+                  Positioned(
+                    left: 8, top: 0, bottom: 0,
+                    child: Center(
+                      child: _OverlayNavButton(
+                        icon: Icons.chevron_left,
+                        onPressed: isFirst ? null : _goPrev,
+                      ),
+                    ),
+                  ),
+
+                  // Right arrow — overlaid on image, vertically centered
+                  Positioned(
+                    right: 8, top: 0, bottom: 0,
+                    child: Center(
+                      child: _OverlayNavButton(
+                        icon: Icons.chevron_right,
+                        onPressed: isLast ? null : _goNext,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
 
-            // ── Text + page dots ─────────────────────────────────────────────
+            // ── Text panel ───────────────────────────────────────────────────
             Expanded(
               flex: 3,
               child: Container(
@@ -162,7 +186,7 @@ class _StoryScreenState extends State<StoryScreen> {
                     AnimatedSwitcher(
                       duration: const Duration(milliseconds: 300),
                       child: Text(
-                        page.text,
+                        content.text,
                         key: ValueKey(_currentPage),
                         textAlign: TextAlign.center,
                         style: const TextStyle(
@@ -191,16 +215,20 @@ class _StoryScreenState extends State<StoryScreen> {
                         );
                       }),
                     ),
+                    if (isLast) ...[
+                      const SizedBox(height: 12),
+                      const Text(
+                        '🌟 The End',
+                        style: TextStyle(
+                          color: Color(0xFFE8A020),
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
-            ),
-
-            // ── Bottom nav ───────────────────────────────────────────────────
-            _BottomNav(
-              onPrev: isFirst ? null : _goPrev,
-              onNext: isLast ? null : _goNext,
-              isLast: isLast,
             ),
           ],
         ),
@@ -210,7 +238,45 @@ class _StoryScreenState extends State<StoryScreen> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sub-widgets (unchanged from Phase 1)
+// Overlay nav button — semi-transparent circle floating over the image
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _OverlayNavButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback? onPressed;
+
+  const _OverlayNavButton({required this.icon, required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    final isEnabled = onPressed != null;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(40),
+        splashColor: Colors.white30,
+        highlightColor: Colors.white12,
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: isEnabled ? Colors.black45 : Colors.transparent,
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            icon,
+            color: isEnabled ? Colors.white : Colors.transparent,
+            size: 36,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Top bar
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _TopBar extends StatelessWidget {
@@ -261,93 +327,11 @@ class _TopBar extends StatelessWidget {
                   : Colors.white38,
               size: 24,
             ),
-            tooltip: narrationEnabled ? 'Turn off narration' : 'Turn on narration',
+            tooltip: narrationEnabled
+                ? 'Turn off narration'
+                : 'Turn on narration',
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _BottomNav extends StatelessWidget {
-  final VoidCallback? onPrev;
-  final VoidCallback? onNext;
-  final bool isLast;
-
-  const _BottomNav({
-    required this.onPrev,
-    required this.onNext,
-    required this.isLast,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 72,
-      color: const Color(0xFF1A1A2E),
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          _NavButton(
-            icon: Icons.chevron_left,
-            label: 'Prev',
-            onPressed: onPrev,
-          ),
-          isLast
-              ? const Text(
-                  '🌟 The End',
-                  style: TextStyle(
-                    color: Color(0xFFFFD700),
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                )
-              : _NavButton(
-                  icon: Icons.chevron_right,
-                  label: 'Next',
-                  onPressed: onNext,
-                  reversed: true,
-                ),
-        ],
-      ),
-    );
-  }
-}
-
-class _NavButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback? onPressed;
-  final bool reversed;
-
-  const _NavButton({
-    required this.icon,
-    required this.label,
-    required this.onPressed,
-    this.reversed = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isEnabled = onPressed != null;
-    final color = isEnabled ? Colors.white : Colors.white24;
-
-    final children = [
-      Icon(icon, color: color, size: 28),
-      const SizedBox(width: 4),
-      Text(label,
-          style: TextStyle(
-              color: color, fontSize: 14, fontWeight: FontWeight.w500)),
-    ];
-
-    return GestureDetector(
-      onTap: onPressed,
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Row(
-          children: reversed ? children.reversed.toList() : children,
-        ),
       ),
     );
   }

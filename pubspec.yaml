@@ -24,4 +24,5 @@ flutter:
   assets:
     - assets/stories/bunny_adventure/cover.jpg
     - assets/stories/bunny_adventure/pages/
-    - assets/stories/bunny_adventure/audio/
+    - assets/stories/bunny_adventure/en/audio/
+    - assets/stories/bunny_adventure/es/audio/
