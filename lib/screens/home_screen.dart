@@ -1,5 +1,5 @@
 // lib/screens/home_screen.dart
-// Phase 2: loads catalog from JSON, renders story cards with tags + age range.
+// Phase 2: loads catalog from JSON, search bar filters by title + tags.
 
 import 'package:flutter/material.dart';
 import '../models/story.dart';
@@ -15,12 +15,36 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final _service = StoryService();
+  final _searchController = TextEditingController();
+
   String _selectedLanguage = 'en';
+  String _searchQuery = '';
 
   static const Map<String, String> _languageLabels = {
     'en': '🇺🇸 English',
     'es': '🇲🇽 Español',
   };
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  // ── Filter logic ───────────────────────────────────────────────────────────
+  // Matches against localized title + all tags (case-insensitive).
+
+  List<StoryMeta> _filter(List<StoryMeta> stories) {
+    if (_searchQuery.isEmpty) return stories;
+    final q = _searchQuery.toLowerCase();
+    return stories.where((s) {
+      final titleMatch = s.localizedTitle(_selectedLanguage)
+          .toLowerCase()
+          .contains(q);
+      final tagMatch = s.tags.any((t) => t.toLowerCase().contains(q));
+      return titleMatch || tagMatch;
+    }).toList();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,7 +70,10 @@ class _HomeScreenState extends State<HomeScreen> {
               dropdownColor: const Color(0xFFFFF8F0),
               style: const TextStyle(color: Color(0xFF3D2B1F), fontSize: 14),
               items: _languageLabels.entries
-                  .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+                  .map((e) => DropdownMenuItem(
+                        value: e.key,
+                        child: Text(e.value),
+                      ))
                   .toList(),
               onChanged: (lang) {
                 if (lang != null) setState(() => _selectedLanguage = lang);
@@ -58,14 +85,13 @@ class _HomeScreenState extends State<HomeScreen> {
       body: FutureBuilder<List<StoryMeta>>(
         future: _service.loadCatalog(),
         builder: (context, snapshot) {
-          // ── Loading ───────────────────────────────────────────────────────
+
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(
               child: CircularProgressIndicator(color: Color(0xFF6B9FD4)),
             );
           }
 
-          // ── Error ─────────────────────────────────────────────────────────
           if (snapshot.hasError) {
             return Center(
               child: Text(
@@ -76,39 +102,97 @@ class _HomeScreenState extends State<HomeScreen> {
             );
           }
 
-          final stories = snapshot.data!;
-          final freeStories = stories.where((s) => s.isFree).toList();
-          final paidStories = stories.where((s) => !s.isFree).toList();
+          final all = snapshot.data!;
+          final filtered = _filter(all);
+          final freeStories = filtered.where((s) => s.isFree).toList();
+          final paidStories = filtered.where((s) => !s.isFree).toList();
 
-          // ── Library ───────────────────────────────────────────────────────
-          return ListView(
-            padding: const EdgeInsets.all(20),
+          return Column(
             children: [
-              if (freeStories.isNotEmpty) ...[
-                _SectionLabel(label: 'Free ${freeStories.length == 1 ? "Story" : "Stories"}'),
-                const SizedBox(height: 12),
-                ...freeStories.map((meta) => Padding(
-                  padding: const EdgeInsets.only(bottom: 20),
-                  child: _StoryCard(
-                    meta: meta,
-                    selectedLanguage: _selectedLanguage,
-                    onTap: () => _openStory(meta),
+
+              // ── Search bar ───────────────────────────────────────────────
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: (v) => setState(() => _searchQuery = v.trim()),
+                  style: const TextStyle(
+                    color: Color(0xFF3D2B1F),
+                    fontSize: 15,
                   ),
-                )),
-              ],
-              if (paidStories.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                _SectionLabel(label: 'More Stories'),
-                const SizedBox(height: 12),
-                ...paidStories.map((meta) => Padding(
-                  padding: const EdgeInsets.only(bottom: 20),
-                  child: _StoryCard(
-                    meta: meta,
-                    selectedLanguage: _selectedLanguage,
-                    onTap: () => _openStory(meta),
+                  decoration: InputDecoration(
+                    hintText: 'Search by title or tag…',
+                    hintStyle: const TextStyle(
+                      color: Color(0xFFBBAA99),
+                      fontSize: 15,
+                    ),
+                    prefixIcon: const Icon(
+                      Icons.search,
+                      color: Color(0xFF9E8872),
+                      size: 20,
+                    ),
+                    // Show X button only when there's text
+                    suffixIcon: _searchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.close,
+                                color: Color(0xFF9E8872), size: 18),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() => _searchQuery = '');
+                            },
+                          )
+                        : null,
+                    filled: true,
+                    fillColor: const Color(0xFFEDE8E0),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide.none,
+                    ),
                   ),
-                )),
-              ],
+                ),
+              ),
+
+              // ── Story list ───────────────────────────────────────────────
+              Expanded(
+                child: filtered.isEmpty
+                    ? _EmptyState(query: _searchQuery)
+                    : ListView(
+                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                        children: [
+                          if (freeStories.isNotEmpty) ...[
+                            _SectionLabel(
+                              label: 'Free ${freeStories.length == 1 ? "Story" : "Stories"}',
+                            ),
+                            const SizedBox(height: 12),
+                            ...freeStories.map((meta) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 20),
+                                  child: _StoryCard(
+                                    meta: meta,
+                                    selectedLanguage: _selectedLanguage,
+                                    searchQuery: _searchQuery,
+                                    onTap: () => _openStory(meta),
+                                  ),
+                                )),
+                          ],
+                          if (paidStories.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            _SectionLabel(label: 'More Stories'),
+                            const SizedBox(height: 12),
+                            ...paidStories.map((meta) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 20),
+                                  child: _StoryCard(
+                                    meta: meta,
+                                    selectedLanguage: _selectedLanguage,
+                                    searchQuery: _searchQuery,
+                                    onTap: () => _openStory(meta),
+                                  ),
+                                )),
+                          ],
+                        ],
+                      ),
+              ),
             ],
           );
         },
@@ -116,7 +200,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Load full story then navigate — shows a brief loading state
   void _openStory(StoryMeta meta) async {
     showDialog(
       context: context,
@@ -129,7 +212,7 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final story = await _service.loadStory(meta);
       if (!mounted) return;
-      Navigator.pop(context); // dismiss loader
+      Navigator.pop(context);
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -149,6 +232,42 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Empty state — shown when search returns no results
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _EmptyState extends StatelessWidget {
+  final String query;
+  const _EmptyState({required this.query});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('🔍', style: TextStyle(fontSize: 40)),
+          const SizedBox(height: 12),
+          Text(
+            'No stories found for "$query"',
+            style: const TextStyle(
+              color: Color(0xFF9E8872),
+              fontSize: 15,
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Try searching by tag — adventure, bedtime…',
+            style: TextStyle(color: Color(0xFFBBAA99), fontSize: 13),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Section label
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _SectionLabel extends StatelessWidget {
@@ -170,15 +289,19 @@ class _SectionLabel extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Story card — highlights matched tag when search is active
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _StoryCard extends StatelessWidget {
   final StoryMeta meta;
   final String selectedLanguage;
+  final String searchQuery;
   final VoidCallback onTap;
 
   const _StoryCard({
     required this.meta,
     required this.selectedLanguage,
+    required this.searchQuery,
     required this.onTap,
   });
 
@@ -204,7 +327,6 @@ class _StoryCard extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // Cover image
               Image.asset(
                 meta.coverPath,
                 fit: BoxFit.cover,
@@ -214,7 +336,6 @@ class _StoryCard extends StatelessWidget {
                 ),
               ),
 
-              // Gradient overlay
               Positioned(
                 bottom: 0, left: 0, right: 0,
                 child: Container(
@@ -232,7 +353,6 @@ class _StoryCard extends StatelessWidget {
                 ),
               ),
 
-              // Title + tags
               Positioned(
                 bottom: 12, left: 16, right: 60,
                 child: Column(
@@ -245,26 +365,35 @@ class _StoryCard extends StatelessWidget {
                         color: Colors.white,
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        shadows: [Shadow(color: Colors.black54, blurRadius: 4)],
+                        shadows: [
+                          Shadow(color: Colors.black54, blurRadius: 4)
+                        ],
                       ),
                     ),
                     const SizedBox(height: 4),
-                    // Age range + tags
                     Row(
                       children: [
-                        _Chip('${meta.ageMin}–${meta.ageMax} yrs'),
+                        _Chip(
+                          '${meta.ageMin}–${meta.ageMax} yrs',
+                          highlight: false,
+                        ),
                         const SizedBox(width: 6),
                         ...meta.tags.take(2).map((tag) => Padding(
-                          padding: const EdgeInsets.only(right: 6),
-                          child: _Chip(tag),
-                        )),
+                              padding: const EdgeInsets.only(right: 6),
+                              child: _Chip(
+                                tag,
+                                // Highlight chip if it matches the search query
+                                highlight: searchQuery.isNotEmpty &&
+                                    tag.toLowerCase().contains(
+                                        searchQuery.toLowerCase()),
+                              ),
+                            )),
                       ],
                     ),
                   ],
                 ),
               ),
 
-              // Badge: FREE or locked icon
               Positioned(
                 top: 12, right: 12,
                 child: meta.isFree
@@ -302,23 +431,32 @@ class _StoryCard extends StatelessWidget {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Tag chip — highlighted version used when tag matches search
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _Chip extends StatelessWidget {
   final String label;
-  const _Chip(this.label);
+  final bool highlight;
+
+  const _Chip(this.label, {this.highlight = false});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: Colors.white24,
+        color: highlight
+            ? const Color(0xFF6B9FD4)  // blue when matched
+            : Colors.white24,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
         label,
-        style: const TextStyle(
+        style: TextStyle(
           color: Colors.white,
           fontSize: 11,
+          fontWeight: highlight ? FontWeight.bold : FontWeight.normal,
         ),
       ),
     );
