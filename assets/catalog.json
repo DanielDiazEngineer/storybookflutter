@@ -1,0 +1,18 @@
+{
+  "stories": [
+    {
+      "id": "bunny_adventure",
+      "title": {
+        "en": "The Bunny Adventure",
+        "es": "La Aventura del Conejito"
+      },
+      "coverPath": "assets/stories/bunny_adventure/cover.jpg",
+      "availableLanguages": ["en", "es"],
+      "ageMin": 3,
+      "ageMax": 7,
+      "isFree": true,
+      "tags": ["adventure", "animals", "bedtime"],
+      "series": null
+    }
+  ]
+}

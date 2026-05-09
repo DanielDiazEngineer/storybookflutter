@@ -1,49 +1,65 @@
 // lib/models/story.dart
+
 // Phase 1.5: adds multi-language support to the data model.
 // Images are language-agnostic. Text + audio are per language code (e.g. 'en', 'es').
 // Phase 3+: audioPath will become a Cloudflare R2 URL instead of an asset path.
 
-// ── Localized text + audio for one page in one language ──────────────────────
+// ── Localized text + audio
+
+// Phase 2: adds fromJson constructors so stories load from JSON assets.
+// Phase 4: same models, but StoryService will feed them from Firestore instead.
 
 class LocalizedContent {
   final String text;
   final String audioPath;
 
-  const LocalizedContent({
-    required this.text,
-    required this.audioPath,
-  });
-}
+  const LocalizedContent({required this.text, required this.audioPath});
 
-// ── One page of a story ───────────────────────────────────────────────────────
+  factory LocalizedContent.fromJson(Map<String, dynamic> json) {
+    return LocalizedContent(
+      text: json['text'] as String,
+      audioPath: json['audioPath'] as String,
+    );
+  }
+}
 
 class StoryPage {
-  final String imagePath;                       // shared across all languages
-  final Map<String, LocalizedContent> content;  // 'en' → {text, audioPath}
+  final String imagePath;
+  final Map<String, LocalizedContent> content;
 
-  const StoryPage({
-    required this.imagePath,
-    required this.content,
-  });
+  const StoryPage({required this.imagePath, required this.content});
 
-  /// Returns content for [langCode], falls back to English if not found.
   LocalizedContent localized(String langCode) =>
       content[langCode] ?? content['en']!;
+
+  factory StoryPage.fromJson(Map<String, dynamic> json) {
+    final rawContent = json['content'] as Map<String, dynamic>;
+    return StoryPage(
+      imagePath: json['imagePath'] as String,
+      content: rawContent.map(
+        (lang, value) => MapEntry(
+          lang,
+          LocalizedContent.fromJson(value as Map<String, dynamic>),
+        ),
+      ),
+    );
+  }
 }
 
-// ── A full story ──────────────────────────────────────────────────────────────
-
-class Story {
+// Lightweight metadata — used on the home screen library grid.
+// Loaded from catalog.json. No page data here.
+class StoryMeta {
   final String id;
-  final Map<String, String> title;    // {'en': 'The Bunny Adventure', 'es': '...'}
+  final Map<String, String> title;
   final String coverPath;
   final List<String> availableLanguages;
   final int ageMin;
   final int ageMax;
   final bool isFree;
-  final List<StoryPage> pages;
+  final List<String> tags;
+  final String? series;
 
-  const Story({
+  const StoryMeta({
     required this.id,
     required this.title,
     required this.coverPath,
@@ -51,71 +67,45 @@ class Story {
     required this.ageMin,
     required this.ageMax,
     required this.isFree,
-    required this.pages,
+    required this.tags,
+    this.series,
   });
 
-  /// Convenience getter so you can do story.localizedTitle('en')
-  String localizedTitle(String langCode) =>
-      title[langCode] ?? title['en']!;
+  String localizedTitle(String langCode) => title[langCode] ?? title['en']!;
+
+  factory StoryMeta.fromJson(Map<String, dynamic> json) {
+    return StoryMeta(
+      id: json['id'] as String,
+      title: Map<String, String>.from(json['title'] as Map),
+      coverPath: json['coverPath'] as String,
+      availableLanguages: List<String>.from(json['availableLanguages'] as List),
+      ageMin: json['ageMin'] as int,
+      ageMax: json['ageMax'] as int,
+      isFree: json['isFree'] as bool,
+      tags: List<String>.from(json['tags'] as List),
+      series: json['series'] as String?,
+    );
+  }
 }
 
-// ── Bundled free story (hardcoded for Phase 1 / 1.5) ─────────────────────────
-// Audio files go in:
-//   assets/stories/bunny_adventure/en/audio/page_01.mp3
-//   assets/stories/bunny_adventure/es/audio/page_01.mp3
-// Images go in:
-//   assets/stories/bunny_adventure/pages/page_01.jpg
+// Full story with pages — loaded from assets/stories/{id}/story.json
+// when the user taps a story card.
+class Story {
+  final String id;
+  final List<StoryPage> pages;
+  final StoryMeta meta;
 
-const Story bundledStory = Story(
-  id: 'bunny_adventure',
-  title: {
-    'en': 'The Bunny Adventure',
-    'es': 'La Aventura del Conejito',
-  },
-  coverPath: 'assets/stories/bunny_adventure/cover.jpg',
-  availableLanguages: ['en', 'es'],
-  ageMin: 3,
-  ageMax: 7,
-  isFree: true,
-  pages: [
-    StoryPage(
-      imagePath: 'assets/stories/bunny_adventure/pages/page_01.jpg',
-      content: {
-        'en': LocalizedContent(
-          text: 'Once upon a time, a little bunny named Pip lived in a cozy burrow under an old oak tree.',
-          audioPath: 'assets/stories/bunny_adventure/en/audio/page_01.mp3',
-        ),
-        'es': LocalizedContent(
-          text: 'Había una vez un conejito llamado Pip que vivía en una acogedora madriguera bajo un viejo roble.',
-          audioPath: 'assets/stories/bunny_adventure/es/audio/page_01.mp3',
-        ),
-      },
-    ),
-    StoryPage(
-      imagePath: 'assets/stories/bunny_adventure/pages/page_02.jpg',
-      content: {
-        'en': LocalizedContent(
-          text: 'One morning, Pip found a bright red door at the edge of the meadow that had never been there before.',
-          audioPath: 'assets/stories/bunny_adventure/en/audio/page_02.mp3',
-        ),
-        'es': LocalizedContent(
-          text: 'Una mañana, Pip encontró una puerta roja brillante al borde del prado que nunca antes había estado allí.',
-          audioPath: 'assets/stories/bunny_adventure/es/audio/page_02.mp3',
-        ),
-      },
-    ),
-    StoryPage(
-      imagePath: 'assets/stories/bunny_adventure/pages/page_03.jpg',
-      content: {
-        'en': LocalizedContent(
-          text: 'Pip took a deep breath, turned the golden handle, and stepped into the most wonderful adventure of her life!',
-          audioPath: 'assets/stories/bunny_adventure/en/audio/page_03.mp3',
-        ),
-        'es': LocalizedContent(
-          text: '¡Pip respiró hondo, giró el picaporte dorado y entró en la aventura más maravillosa de su vida!',
-          audioPath: 'assets/stories/bunny_adventure/es/audio/page_03.mp3',
-        ),
-      },
-    ),
-  ],
-);
+  const Story({required this.id, required this.pages, required this.meta});
+
+  String localizedTitle(String langCode) => meta.localizedTitle(langCode);
+
+  factory Story.fromJson(Map<String, dynamic> json, StoryMeta meta) {
+    return Story(
+      id: json['id'] as String,
+      pages: (json['pages'] as List)
+          .map((p) => StoryPage.fromJson(p as Map<String, dynamic>))
+          .toList(),
+      meta: meta,
+    );
+  }
+}

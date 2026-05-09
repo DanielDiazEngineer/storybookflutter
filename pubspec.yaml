@@ -9,20 +9,28 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  audioplayers: ^6.1.0      # replaces just_audio — works on web, Android, iOS
-  #just_audio: ^0.9.40      # audio playback
+  audioplayers: ^6.1.0
   cupertino_icons: ^1.0.6
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^6.0.0
+  flutter_lints: ^3.0.0
 
 flutter:
   uses-material-design: true
 
   assets:
+    # Story catalog — add new stories here (one line per story folder)
+    - assets/catalog.json
+    - assets/stories/bunny_adventure/story.json
     - assets/stories/bunny_adventure/cover.jpg
     - assets/stories/bunny_adventure/pages/
     - assets/stories/bunny_adventure/en/audio/
     - assets/stories/bunny_adventure/es/audio/
+    # When you add a new story, copy the 5 lines above and change the id:
+    # - assets/stories/NEW_STORY_ID/story.json
+    # - assets/stories/NEW_STORY_ID/cover.jpg
+    # - assets/stories/NEW_STORY_ID/pages/
+    # - assets/stories/NEW_STORY_ID/en/audio/
+    # - assets/stories/NEW_STORY_ID/es/audio/
