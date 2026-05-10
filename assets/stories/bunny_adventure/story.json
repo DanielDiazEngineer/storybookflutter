@@ -2,41 +2,41 @@
   "id": "bunny_adventure",
   "pages": [
     {
-      "imagePath": "assets/stories/bunny_adventure/pages/page_01.jpg",
+      "imagePath": "stories/bunny_adventure/pages/page_01.jpg",
       "content": {
         "en": {
           "text": "Once upon a time, a little bunny named Pip lived in a cozy burrow under an old oak tree.",
-          "audioPath": "assets/stories/bunny_adventure/en/audio/page_01.mp3"
+          "audioPath": "stories/bunny_adventure/en/audio/page_01.mp3"
         },
         "es": {
           "text": "Había una vez un conejito llamado Pip que vivía en una acogedora madriguera bajo un viejo roble.",
-          "audioPath": "assets/stories/bunny_adventure/es/audio/page_01.mp3"
+          "audioPath": "stories/bunny_adventure/es/audio/page_01.mp3"
         }
       }
     },
     {
-      "imagePath": "assets/stories/bunny_adventure/pages/page_02.jpg",
+      "imagePath": "stories/bunny_adventure/pages/page_02.jpg",
       "content": {
         "en": {
           "text": "One morning, Pip found a bright red door at the edge of the meadow that had never been there before.",
-          "audioPath": "assets/stories/bunny_adventure/en/audio/page_02.mp3"
+          "audioPath": "stories/bunny_adventure/en/audio/page_02.mp3"
         },
         "es": {
           "text": "Una mañana, Pip encontró una puerta roja brillante al borde del prado que nunca antes había estado allí.",
-          "audioPath": "assets/stories/bunny_adventure/es/audio/page_02.mp3"
+          "audioPath": "stories/bunny_adventure/es/audio/page_02.mp3"
         }
       }
     },
     {
-      "imagePath": "assets/stories/bunny_adventure/pages/page_03.jpg",
+      "imagePath": "stories/bunny_adventure/pages/page_03.jpg",
       "content": {
         "en": {
           "text": "Pip took a deep breath, turned the golden handle, and stepped into the most wonderful adventure of her life!",
-          "audioPath": "assets/stories/bunny_adventure/en/audio/page_03.mp3"
+          "audioPath": "stories/bunny_adventure/en/audio/page_03.mp3"
         },
         "es": {
           "text": "¡Pip respiró hondo, giró el picaporte dorado y entró en la aventura más maravillosa de su vida!",
-          "audioPath": "assets/stories/bunny_adventure/es/audio/page_03.mp3"
+          "audioPath": "stories/bunny_adventure/es/audio/page_03.mp3"
         }
       }
     }

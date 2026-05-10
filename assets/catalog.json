@@ -6,13 +6,65 @@
         "en": "The Bunny Adventure",
         "es": "La Aventura del Conejito"
       },
-      "coverPath": "assets/stories/bunny_adventure/cover.jpg",
-      "availableLanguages": ["en", "es"],
+      "coverPath": "stories/bunny_adventure/cover.jpg",
+      "availableLanguages": [
+        "en",
+        "es"
+      ],
       "ageMin": 3,
       "ageMax": 7,
       "isFree": true,
-      "tags": ["adventure", "animals", "bedtime"],
-      "series": null
+      "isBundled": true,
+      "tags": [
+        "adventure",
+        "animals",
+        "bedtime"
+      ],
+      "series": "bunny"
+    },
+    {
+      "id": "bunny2",
+      "title": {
+        "en": "Bunny's New Friend",
+        "es": "El Nuevo Amigo del Conejito"
+      },
+      "coverPath": "stories/bunny2/cover.jpg",
+      "availableLanguages": [
+        "en",
+        "es"
+      ],
+      "ageMin": 3,
+      "ageMax": 7,
+      "isFree": false,
+      "isBundled": false,
+      "tags": [
+        "friendship",
+        "animals",
+        "bedtime"
+      ],
+      "series": "bunny"
+    },
+    {
+      "id": "bunny3",
+      "title": {
+        "en": "Bunny and the Moon",
+        "es": "El Conejito y la Luna"
+      },
+      "coverPath": "stories/bunny3/cover.jpg",
+      "availableLanguages": [
+        "en",
+        "es"
+      ],
+      "ageMin": 3,
+      "ageMax": 7,
+      "isFree": false,
+      "isBundled": false,
+      "tags": [
+        "adventure",
+        "animals",
+        "bedtime"
+      ],
+      "series": "bunny"
     }
   ]
 }

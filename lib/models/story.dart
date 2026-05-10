@@ -56,6 +56,7 @@ class StoryMeta {
   final int ageMin;
   final int ageMax;
   final bool isFree;
+  final bool isBundled; // ← NEW
   final List<String> tags;
   final String? series;
 
@@ -67,6 +68,7 @@ class StoryMeta {
     required this.ageMin,
     required this.ageMax,
     required this.isFree,
+    required this.isBundled,
     required this.tags,
     this.series,
   });
@@ -82,6 +84,7 @@ class StoryMeta {
       ageMin: json['ageMin'] as int,
       ageMax: json['ageMax'] as int,
       isFree: json['isFree'] as bool,
+      isBundled: json['isBundled'] as bool? ?? false,
       tags: List<String>.from(json['tags'] as List),
       series: json['series'] as String?,
     );

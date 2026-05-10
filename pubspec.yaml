@@ -11,6 +11,13 @@ dependencies:
     sdk: flutter
   audioplayers: ^6.1.0
   cupertino_icons: ^1.0.6
+  http: ^1.2.0
+  cached_network_image: ^3.4.1
+  path_provider: ^2.1.4
+  path: ^1.9.0
+  crypto: ^3.0.5
+  flutter_dotenv: ^5.2.1
+
 
 dev_dependencies:
   flutter_test:
@@ -21,16 +28,16 @@ flutter:
   uses-material-design: true
 
   assets:
-    # Story catalog — add new stories here (one line per story folder)
+    # Catalog ships with the app — small, fast, works offline
+    - .env  
     - assets/catalog.json
+
+    # Bundled fallback story (the one free story always works offline)
     - assets/stories/bunny_adventure/story.json
     - assets/stories/bunny_adventure/cover.jpg
     - assets/stories/bunny_adventure/pages/
     - assets/stories/bunny_adventure/en/audio/
     - assets/stories/bunny_adventure/es/audio/
-    # When you add a new story, copy the 5 lines above and change the id:
-    # - assets/stories/NEW_STORY_ID/story.json
-    # - assets/stories/NEW_STORY_ID/cover.jpg
-    # - assets/stories/NEW_STORY_ID/pages/
-    # - assets/stories/NEW_STORY_ID/en/audio/
-    # - assets/stories/NEW_STORY_ID/es/audio/
+
+    # Future stories: NOT bundled. Add them to catalog.json with
+    # "isBundled": false and upload assets to R2.

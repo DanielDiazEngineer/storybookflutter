@@ -1,17 +1,27 @@
 // lib/screens/story_screen.dart
+//
+// Phase 3: images and audio resolve through StoryService.
+//   - Bundled story  → Image.asset + AssetSource
+//   - Remote (mobile) → CachedNetworkImage + DeviceFileSource (from disk cache)
+//   - Remote (web)    → CachedNetworkImage + UrlSource (browser HTTP cache)
 
-import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/material.dart';
 import '../models/story.dart';
+import '../services/story_service.dart';
 
 class StoryScreen extends StatefulWidget {
   final Story story;
-  final String selectedLanguage; // passed from HomeScreen
+  final String selectedLanguage;
+  final StoryService service;
 
   const StoryScreen({
     super.key,
     required this.story,
     required this.selectedLanguage,
+    required this.service,
   });
 
   @override
@@ -21,6 +31,7 @@ class StoryScreen extends StatefulWidget {
 class _StoryScreenState extends State<StoryScreen> {
   int _currentPage = 0;
   bool _narrationEnabled = true;
+  bool _audioLoading = false;
   late String _lang;
 
   final AudioPlayer _player = AudioPlayer();
@@ -47,13 +58,31 @@ class _StoryScreenState extends State<StoryScreen> {
 
   Future<void> _playCurrentPage() async {
     if (!_narrationEnabled) return;
+
+    final content = widget.story.pages[_currentPage].localized(_lang);
+    if (mounted) setState(() => _audioLoading = true);
+
     try {
-      final content = widget.story.pages[_currentPage].localized(_lang);
       await _player.stop();
-      final assetPath = content.audioPath.replaceFirst('assets/', '');
-      await _player.play(AssetSource(assetPath));
+
+      if (widget.story.meta.isBundled) {
+        // AssetSource expects path relative to assets/
+        await _player.play(AssetSource(content.audioPath));
+      } else if (kIsWeb) {
+        // Web: stream directly, browser caches HTTP response
+        await _player.play(
+          UrlSource(widget.service.resolveUrl(content.audioPath)),
+        );
+      } else {
+        // Mobile remote: ensure cached, then play from local file
+        final localPath =
+            await widget.service.getAudioFilePath(content.audioPath);
+        await _player.play(DeviceFileSource(localPath));
+      }
     } catch (e) {
       debugPrint('Audio error: $e');
+    } finally {
+      if (mounted) setState(() => _audioLoading = false);
     }
   }
 
@@ -80,7 +109,59 @@ class _StoryScreenState extends State<StoryScreen> {
   void _goPrev() => _goToPage(_currentPage - 1);
 
   void _goBack() {
-    _stopAudio().then((_) => Navigator.pop(context));
+    _stopAudio().then((_) {
+      if (mounted) Navigator.pop(context);
+    });
+  }
+
+  // ── Image widget ──────────────────────────────────────────────────────────
+
+  Widget _buildImage(StoryPage page) {
+    if (widget.story.meta.isBundled) {
+      return Image.asset(
+        widget.service.resolveAssetPath(page.imagePath),
+        key: ValueKey(_currentPage),
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+        errorBuilder: (_, __, ___) => _imageFallback(),
+      );
+    }
+    return CachedNetworkImage(
+      imageUrl: widget.service.resolveUrl(page.imagePath),
+      key: ValueKey(_currentPage),
+      fit: BoxFit.cover,
+      width: double.infinity,
+      height: double.infinity,
+      placeholder: (_, __) => Container(
+        color: const Color(0xFF1A1A2E),
+        child: const Center(
+          child: CircularProgressIndicator(color: Color(0xFF6B9FD4)),
+        ),
+      ),
+      errorWidget: (_, __, ___) => _imageFallback(),
+    );
+  }
+
+  Widget _imageFallback() {
+    return Container(
+      color: const Color(0xFF1A1A2E),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.image_not_supported,
+                color: Colors.white38, size: 48),
+            const SizedBox(height: 8),
+            Text(
+              'Page ${_currentPage + 1} could not load',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white38, fontSize: 13),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   // ── Build ──────────────────────────────────────────────────────────────────
@@ -98,58 +179,30 @@ class _StoryScreenState extends State<StoryScreen> {
       body: SafeArea(
         child: Column(
           children: [
-
-            // ── Top bar ──────────────────────────────────────────────────────
             _TopBar(
               title: widget.story.localizedTitle(_lang),
               narrationEnabled: _narrationEnabled,
+              audioLoading: _audioLoading,
               onBack: _goBack,
               onToggleNarration: _toggleNarration,
             ),
 
-            // ── Image with overlaid nav arrows ───────────────────────────────
+            // ── Image with overlaid nav arrows ──────────────────────────────
             Expanded(
               flex: 6,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-
-                  // Page illustration
                   AnimatedSwitcher(
                     duration: const Duration(milliseconds: 400),
                     transitionBuilder: (child, animation) =>
                         FadeTransition(opacity: animation, child: child),
-                    child: Image.asset(
-                      page.imagePath,
-                      key: ValueKey(_currentPage),
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                      height: double.infinity,
-                      errorBuilder: (_, __, ___) => Container(
-                        color: const Color(0xFF1A1A2E),
-                        child: Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.image_not_supported,
-                                  color: Colors.white38, size: 48),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Page ${_currentPage + 1} image\n(add to assets/)',
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                    color: Colors.white38, fontSize: 13),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
+                    child: _buildImage(page),
                   ),
-
-                  // Left arrow — overlaid on image, vertically centered
                   Positioned(
-                    left: 8, top: 0, bottom: 0,
+                    left: 8,
+                    top: 0,
+                    bottom: 0,
                     child: Center(
                       child: _OverlayNavButton(
                         icon: Icons.chevron_left,
@@ -157,10 +210,10 @@ class _StoryScreenState extends State<StoryScreen> {
                       ),
                     ),
                   ),
-
-                  // Right arrow — overlaid on image, vertically centered
                   Positioned(
-                    right: 8, top: 0, bottom: 0,
+                    right: 8,
+                    top: 0,
+                    bottom: 0,
                     child: Center(
                       child: _OverlayNavButton(
                         icon: Icons.chevron_right,
@@ -172,14 +225,14 @@ class _StoryScreenState extends State<StoryScreen> {
               ),
             ),
 
-            // ── Text panel ───────────────────────────────────────────────────
+            // ── Text panel ──────────────────────────────────────────────────
             Expanded(
               flex: 3,
               child: Container(
                 width: double.infinity,
                 color: const Color(0xFFFFF8F0),
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 28, vertical: 20),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -238,7 +291,7 @@ class _StoryScreenState extends State<StoryScreen> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Overlay nav button — semi-transparent circle floating over the image
+// Overlay nav button
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _OverlayNavButton extends StatelessWidget {
@@ -276,18 +329,20 @@ class _OverlayNavButton extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Top bar
+// Top bar — adds a tiny audio-loading indicator next to the volume button
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _TopBar extends StatelessWidget {
   final String title;
   final bool narrationEnabled;
+  final bool audioLoading;
   final VoidCallback onBack;
   final VoidCallback onToggleNarration;
 
   const _TopBar({
     required this.title,
     required this.narrationEnabled,
+    required this.audioLoading,
     required this.onBack,
     required this.onToggleNarration,
   });
@@ -318,18 +373,28 @@ class _TopBar extends StatelessWidget {
               ),
             ),
           ),
+          if (audioLoading)
+            const Padding(
+              padding: EdgeInsets.only(right: 8),
+              child: SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Color(0xFF6B9FD4),
+                ),
+              ),
+            ),
           IconButton(
             onPressed: onToggleNarration,
             icon: Icon(
               narrationEnabled ? Icons.volume_up : Icons.volume_off,
-              color: narrationEnabled
-                  ? const Color(0xFF6B9FD4)
-                  : Colors.white38,
+              color:
+                  narrationEnabled ? const Color(0xFF6B9FD4) : Colors.white38,
               size: 24,
             ),
-            tooltip: narrationEnabled
-                ? 'Turn off narration'
-                : 'Turn on narration',
+            tooltip:
+                narrationEnabled ? 'Turn off narration' : 'Turn on narration',
           ),
         ],
       ),
