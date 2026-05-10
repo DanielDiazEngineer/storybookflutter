@@ -17,7 +17,8 @@ dependencies:
   path: ^1.9.0
   crypto: ^3.0.5
   flutter_dotenv: ^5.2.1
-
+  shared_preferences: ^2.3.2     # NEW — resume state persistence
+  animations: ^2.0.11             # NEW — OpenContainer for chapter sheet morph
 
 dev_dependencies:
   flutter_test:
@@ -28,16 +29,10 @@ flutter:
   uses-material-design: true
 
   assets:
-    # Catalog ships with the app — small, fast, works offline
-    - .env  
+    - .env
     - assets/catalog.json
-
-    # Bundled fallback story (the one free story always works offline)
     - assets/stories/bunny_adventure/story.json
     - assets/stories/bunny_adventure/cover.jpg
     - assets/stories/bunny_adventure/pages/
     - assets/stories/bunny_adventure/en/audio/
     - assets/stories/bunny_adventure/es/audio/
-
-    # Future stories: NOT bundled. Add them to catalog.json with
-    # "isBundled": false and upload assets to R2.
