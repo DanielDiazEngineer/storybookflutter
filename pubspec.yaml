@@ -20,6 +20,8 @@ dependencies:
   shared_preferences: ^2.3.2     # NEW — resume state persistence
   animations: ^2.0.11             # NEW — OpenContainer for chapter sheet morph
 
+  firebase_core: ^4.7.0
+  firebase_auth: ^6.4.0
 dev_dependencies:
   flutter_test:
     sdk: flutter

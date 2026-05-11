@@ -12,6 +12,11 @@ switched just_audio: ^0.9.40      # audio playback
 in favor of chrome testable.
 
 
+after firebase login
+dart pub global activate flutterfire_cli
+
+
+
 Adding a second story from now on is purely a content job — zero Dart:
 
 Drop folder assets/stories/sleepy_dragon/ with images, audio
