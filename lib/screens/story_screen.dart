@@ -69,6 +69,15 @@ class _StoryScreenState extends State<StoryScreen>
   // Swipe state — for the small "in-flight" tilt while dragging.
   double _dragDx = 0.0;
 
+  // Autoplay: when narration of a page ends, auto-advance after a brief dwell.
+  bool _autoPlayEnabled = false;
+  Timer? _autoPlayTimer;
+  static const _autoPlayDelay = Duration(milliseconds: 1200);
+
+  // Volume (0.0..1.0). Applied to the player; persists across pages within
+  // the session because AudioPlayer retains setVolume across play() calls.
+  double _volume = 1.0;
+
   final AudioPlayer _player = AudioPlayer();
 
   @override
@@ -89,6 +98,7 @@ class _StoryScreenState extends State<StoryScreen>
         _tapZonesArmed = true;
       });
       _chevronPulse.forward(from: 0).whenComplete(() => _chevronPulse.stop());
+      _maybeScheduleAutoPlay();
     });
 
     _onPageEntered();
@@ -98,6 +108,7 @@ class _StoryScreenState extends State<StoryScreen>
   void dispose() {
     _chromeIdleTimer?.cancel();
     _chevronArmTimer?.cancel();
+    _autoPlayTimer?.cancel();
     _chevronPulse.dispose();
     _player.dispose();
     super.dispose();
@@ -202,8 +213,41 @@ class _StoryScreenState extends State<StoryScreen>
       _playCurrentPage();
     } else {
       _stopAudio();
+      _autoPlayTimer?.cancel();
       // Arm tap zones since narration is now off
       setState(() => _tapZonesArmed = true);
+    }
+  }
+
+  // ── Autoplay & volume ─────────────────────────────────────────────────────
+
+  void _toggleAutoPlay() {
+    _wakeChrome();
+    setState(() => _autoPlayEnabled = !_autoPlayEnabled);
+    if (!_autoPlayEnabled) {
+      _autoPlayTimer?.cancel();
+    }
+    // If turned on mid-page, doesn't retroactively advance — applies from
+    // the next narration completion onward. Intentional: surprise advances
+    // would be jarring right after a deliberate toggle.
+  }
+
+  void _maybeScheduleAutoPlay() {
+    if (!_autoPlayEnabled) return;
+    final isLast = _currentPage == widget.story.pages.length - 1;
+    if (isLast) return;
+    _autoPlayTimer?.cancel();
+    _autoPlayTimer = Timer(_autoPlayDelay, () {
+      if (mounted) _goNext();
+    });
+  }
+
+  Future<void> _setVolume(double v) async {
+    setState(() => _volume = v);
+    try {
+      await _player.setVolume(v);
+    } catch (_) {
+      // Volume changes are non-critical; swallow on platforms where it fails
     }
   }
 
@@ -212,6 +256,7 @@ class _StoryScreenState extends State<StoryScreen>
   void _goToPage(int index, PageTurnDirection direction) {
     if (index < 0 || index >= widget.story.pages.length) return;
     if (index == _currentPage) return;
+    _autoPlayTimer?.cancel();
     _stopAudio();
     setState(() {
       _lastDirection = direction;
@@ -375,8 +420,12 @@ class _StoryScreenState extends State<StoryScreen>
                     pageCount: widget.story.pages.length,
                     narrationEnabled: _narrationEnabled,
                     audioLoading: _audioLoading,
+                    autoPlayEnabled: _autoPlayEnabled,
+                    volume: _volume,
                     onHome: _goHome,
                     onToggleNarration: _toggleNarration,
+                    onToggleAutoPlay: _toggleAutoPlay,
+                    onVolumeChanged: _setVolume,
                     chapterIndexBuilder: _buildChapterIndexButton,
                   ),
                 ),
@@ -512,7 +561,7 @@ class _ChevronButton extends StatelessWidget {
                 child: Container(
                   width: 64,
                   height: 64,
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                     color: Colors.black54,
                     shape: BoxShape.circle,
                     boxShadow: [
@@ -542,8 +591,12 @@ class _TopChrome extends StatelessWidget {
   final int pageCount;
   final bool narrationEnabled;
   final bool audioLoading;
+  final bool autoPlayEnabled;
+  final double volume;
   final VoidCallback onHome;
   final VoidCallback onToggleNarration;
+  final VoidCallback onToggleAutoPlay;
+  final ValueChanged<double> onVolumeChanged;
   final WidgetBuilder chapterIndexBuilder;
 
   const _TopChrome({
@@ -551,8 +604,12 @@ class _TopChrome extends StatelessWidget {
     required this.pageCount,
     required this.narrationEnabled,
     required this.audioLoading,
+    required this.autoPlayEnabled,
+    required this.volume,
     required this.onHome,
     required this.onToggleNarration,
+    required this.onToggleAutoPlay,
+    required this.onVolumeChanged,
     required this.chapterIndexBuilder,
   });
 
@@ -582,6 +639,22 @@ class _TopChrome extends StatelessWidget {
                 ),
               ),
             ),
+          // Autoplay: disabled (faded) when narration is off, since there's
+          // no narration completion to trigger an advance.
+          Opacity(
+            opacity: narrationEnabled ? 1.0 : 0.4,
+            child: _ChromeButton(
+              icon: autoPlayEnabled
+                  ? Icons.play_circle_filled_rounded
+                  : Icons.play_circle_outline_rounded,
+              tooltip: autoPlayEnabled
+                  ? 'Auto-play on'
+                  : 'Auto-play next page',
+              highlight: autoPlayEnabled,
+              onTap: narrationEnabled ? onToggleAutoPlay : () {},
+            ),
+          ),
+          const SizedBox(width: 10),
           _ChromeButton(
             icon: narrationEnabled
                 ? Icons.volume_up_rounded
@@ -589,6 +662,36 @@ class _TopChrome extends StatelessWidget {
             tooltip: narrationEnabled ? 'Mute narration' : 'Unmute narration',
             highlight: narrationEnabled,
             onTap: onToggleNarration,
+          ),
+          // Inline volume slider: animated in/out when narration toggles.
+          AnimatedSize(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOut,
+            child: narrationEnabled
+                ? Padding(
+                    padding: const EdgeInsets.only(left: 6, right: 4),
+                    child: SizedBox(
+                      width: 110,
+                      child: SliderTheme(
+                        data: SliderTheme.of(context).copyWith(
+                          trackHeight: 4,
+                          thumbShape: const RoundSliderThumbShape(
+                              enabledThumbRadius: 8),
+                          overlayShape: const RoundSliderOverlayShape(
+                              overlayRadius: 16),
+                          activeTrackColor: Colors.white,
+                          inactiveTrackColor: Colors.white30,
+                          thumbColor: Colors.white,
+                          overlayColor: Colors.white24,
+                        ),
+                        child: Slider(
+                          value: volume,
+                          onChanged: onVolumeChanged,
+                        ),
+                      ),
+                    ),
+                  )
+                : const SizedBox.shrink(),
           ),
           const SizedBox(width: 10),
           chapterIndexBuilder(context),

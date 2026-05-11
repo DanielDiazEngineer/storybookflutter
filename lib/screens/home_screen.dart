@@ -39,13 +39,12 @@ class _HomeScreenState extends State<HomeScreen> {
     // 'pt': '🇧🇷 Português',
   };
 
-  Future<List<StoryMeta>>? _catalogFuture;
   Future<ResumeState?>? _resumeFuture;
 
   @override
   void initState() {
     super.initState();
-    _catalogFuture = _service.loadCatalog();
+    _service.loadCatalog(); // fire-and-forget; the notifier publishes results
     _resumeFuture = _resume.getMostRecent();
   }
 
@@ -234,25 +233,14 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: AppColors.cream,
       body: SafeArea(
-        child: FutureBuilder<List<StoryMeta>>(
-          future: _catalogFuture,
-          builder: (context, catalogSnap) {
-            if (catalogSnap.connectionState == ConnectionState.waiting) {
+        child: ValueListenableBuilder<List<StoryMeta>?>(
+          valueListenable: _service.catalog,
+          builder: (context, all, _) {
+            if (all == null) {
               return const Center(
                 child: CircularProgressIndicator(color: AppColors.accent),
               );
             }
-            if (catalogSnap.hasError) {
-              return Center(
-                child: Text(
-                  'Could not load stories\n${catalogSnap.error}',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: AppColors.inkSoft),
-                ),
-              );
-            }
-
-            final all = catalogSnap.data!;
 
             return FutureBuilder<ResumeState?>(
               future: _resumeFuture,
@@ -264,13 +252,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 return CustomScrollView(
                   slivers: [
                     SliverToBoxAdapter(child: _buildTopBar()),
-                    SliverToBoxAdapter(
-                      child: _buildFilterChips(tags),
-                    ),
+                    SliverToBoxAdapter(child: _buildFilterChips(tags)),
                     if (resume != null)
-                      SliverToBoxAdapter(
-                        child: _buildContinueCard(all, resume),
-                      ),
+                      SliverToBoxAdapter(child: _buildContinueCard(all, resume)),
                     SliverPadding(
                       padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
                       sliver: SliverGrid(
