@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -105,14 +106,50 @@ class StoryService {
     }
   }
 
+  //Migrated catalog to Firestore, remain s here for quick R2 testing before full deprecation
+  // Future<String?> _fetchRemoteCatalogBody() async {
+  //   try {
+  //     final url = '$_r2BaseUrl/catalog.json';
+  //     final response =
+  //         await http.get(Uri.parse(url)).timeout(const Duration(seconds: 10));
+  //     if (response.statusCode != 200) return null;
+  //     return response.body;
+  //   } catch (_) {
+  //     return null;
+  //   }
+  // }
+
+  /// Pulls the catalog from Firestore /stories where published == true,
+  /// ordered by sortOrder. Projects each doc to the same JSON shape as
+  /// assets/catalog.json so the rest of the pipeline (cache, merge,
+  /// parse) doesn't need to know the source changed.
   Future<String?> _fetchRemoteCatalogBody() async {
     try {
-      final url = '$_r2BaseUrl/catalog.json';
-      final response =
-          await http.get(Uri.parse(url)).timeout(const Duration(seconds: 10));
-      if (response.statusCode != 200) return null;
-      return response.body;
-    } catch (_) {
+      final snap = await FirebaseFirestore.instance
+          .collection('stories')
+          .where('published', isEqualTo: true)
+          .orderBy('sortOrder')
+          .get();
+
+      final stories = snap.docs.map((d) {
+        final data = d.data();
+        return <String, dynamic>{
+          'id': d.id,
+          'title': data['title'],
+          'coverPath': data['coverPath'],
+          'availableLanguages': data['availableLanguages'],
+          'ageMin': data['ageMin'],
+          'ageMax': data['ageMax'],
+          'isFree': data['isFree'],
+          'isBundled': data['isBundled'],
+          'tags': data['tags'],
+          if (data['series'] != null) 'series': data['series'],
+        };
+      }).toList();
+
+      return jsonEncode({'stories': stories});
+    } catch (e) {
+      debugPrint('StoryService: Firestore catalog fetch failed: $e');
       return null;
     }
   }
