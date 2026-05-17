@@ -5,10 +5,14 @@
 //  - Theme tokens consolidated for the cozy-storybook aesthetic
 //  - Reduce-motion is honored downstream via MediaQuery.disableAnimations
 
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'firebase_options.dart';
 import 'screens/home_screen.dart';
+import 'services/auth_service.dart';
+import 'services/user_service.dart';
 
 // ── Design tokens ───────────────────────────────────────────────────────────
 // Centralised here so the redesign pass has a single source of truth.
@@ -43,6 +47,15 @@ class AppDurations {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Firebase first — anything else that may touch Firebase services
+  // (auth, firestore) needs the app initialized.
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  await AuthService().ensureSignedIn();
+  await UserService().ensureProfileExists();
+
   await dotenv.load(fileName: '.env');
 
   // Lock to landscape for the whole app. Stories are landscape-painted;

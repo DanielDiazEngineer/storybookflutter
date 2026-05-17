@@ -17,11 +17,12 @@ dependencies:
   path: ^1.9.0
   crypto: ^3.0.5
   flutter_dotenv: ^5.2.1
-  shared_preferences: ^2.3.2     # NEW — resume state persistence
+ # shared_preferences: ^2.3.2     # removed in favor of firebase
   animations: ^2.0.11             # NEW — OpenContainer for chapter sheet morph
 
   firebase_core: ^4.7.0
   firebase_auth: ^6.4.0
+  cloud_firestore: ^6.4.1
 dev_dependencies:
   flutter_test:
     sdk: flutter

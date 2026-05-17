@@ -1,18 +1,27 @@
 // lib/services/resume_service.dart
 //
-// Tracks where the reader left off in each story, so the home screen
-// can surface a "Continue" hero card and re-entering a story can offer
-// to resume vs. start over.
+// Tracks where the reader left off in each story. Backed by Firestore
+// at /users/{uid}/progress/{storyId}. Public interface unchanged from
+// the SharedPreferences-backed Phase 3 version, so screens consume it
+// identically.
 //
-// Storage shape (shared_preferences):
-//   resume.lastStoryId  → String?           — most recently read story
-//   resume.{storyId}.page → int             — last page index in that story
-//   resume.{storyId}.lang → String          — language used last time
-//   resume.{storyId}.ts   → int (epoch ms)  — when it was saved
+// Doc shape:
+//   lastPage: int
+//   langCode: 'en' | 'es'
+//   lastReadAt: serverTimestamp
+//   completed: bool
+//   completedAt: serverTimestamp?   (only when completed == true)
 //
-// Kept deliberately tiny: this is hot-path data, not analytics.
+// Finishing a story sets completed=true rather than deleting the doc.
+// The progress data persists for later features (completion badges,
+// reading-history view). The "continue" card filters completed out.
+//
+// Firestore offline persistence is on by default — reads and writes
+// work offline and sync when connectivity returns.
 
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 
 class ResumeState {
   final String storyId;
@@ -29,57 +38,96 @@ class ResumeState {
 }
 
 class ResumeService {
-  static const _kLastStoryId = 'resume.lastStoryId';
-  static String _kPage(String id) => 'resume.$id.page';
-  static String _kLang(String id) => 'resume.$id.lang';
-  static String _kTs(String id) => 'resume.$id.ts';
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
+
+  CollectionReference<Map<String, dynamic>>? _progressCollection() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return null;
+    return _db.collection('users').doc(user.uid).collection('progress');
+  }
 
   Future<void> savePosition({
     required String storyId,
     required int pageIndex,
     required String langCode,
   }) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_kLastStoryId, storyId);
-    await prefs.setInt(_kPage(storyId), pageIndex);
-    await prefs.setString(_kLang(storyId), langCode);
-    await prefs.setInt(_kTs(storyId), DateTime.now().millisecondsSinceEpoch);
+    final col = _progressCollection();
+    if (col == null) return;
+    try {
+      await col.doc(storyId).set({
+        'lastPage': pageIndex,
+        'langCode': langCode,
+        'lastReadAt': FieldValue.serverTimestamp(),
+        'completed': false,
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('ResumeService: savePosition failed: $e');
+    }
   }
 
+  /// The most recently read, not-yet-completed story.
   Future<ResumeState?> getMostRecent() async {
-    final prefs = await SharedPreferences.getInstance();
-    final id = prefs.getString(_kLastStoryId);
-    if (id == null) return null;
-    return _read(prefs, id);
+    final col = _progressCollection();
+    if (col == null) return null;
+    try {
+      final snap = await col
+          .where('completed', isEqualTo: false)
+          .orderBy('lastReadAt', descending: true)
+          .limit(1)
+          .get();
+      if (snap.docs.isEmpty) return null;
+      return _docToState(snap.docs.first);
+    } catch (e) {
+      debugPrint('ResumeService: getMostRecent failed: $e');
+      return null;
+    }
   }
 
+  /// Progress for a specific story. Returns null for completed stories so
+  /// the reader starts fresh next time.
   Future<ResumeState?> getForStory(String storyId) async {
-    final prefs = await SharedPreferences.getInstance();
-    return _read(prefs, storyId);
+    final col = _progressCollection();
+    if (col == null) return null;
+    try {
+      final doc = await col.doc(storyId).get();
+      if (!doc.exists) return null;
+      final data = doc.data();
+      if (data == null || data['completed'] == true) return null;
+      return _docToState(doc);
+    } catch (e) {
+      debugPrint('ResumeService: getForStory failed: $e');
+      return null;
+    }
   }
 
-  ResumeState? _read(SharedPreferences prefs, String storyId) {
-    final page = prefs.getInt(_kPage(storyId));
-    final lang = prefs.getString(_kLang(storyId));
-    final ts = prefs.getInt(_kTs(storyId));
+  ResumeState? _docToState(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data();
+    if (data == null) return null;
+    final page = data['lastPage'] as int?;
+    final lang = data['langCode'] as String?;
+    final ts = (data['lastReadAt'] as Timestamp?)?.toDate();
     if (page == null || lang == null || ts == null) return null;
     return ResumeState(
-      storyId: storyId,
+      storyId: doc.id,
       pageIndex: page,
       langCode: lang,
-      updatedAt: DateTime.fromMillisecondsSinceEpoch(ts),
+      updatedAt: ts,
     );
   }
 
-  /// Called when the reader reaches the last page or the user explicitly
-  /// finishes a story — clears the resume marker for that story.
+  /// Called when the user finishes a story. Marks completed=true; the doc
+  /// stays for badges/history. The "continue" card excludes completed
+  /// docs via the query in [getMostRecent].
   Future<void> clearForStory(String storyId) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_kPage(storyId));
-    await prefs.remove(_kLang(storyId));
-    await prefs.remove(_kTs(storyId));
-    if (prefs.getString(_kLastStoryId) == storyId) {
-      await prefs.remove(_kLastStoryId);
+    final col = _progressCollection();
+    if (col == null) return;
+    try {
+      await col.doc(storyId).set({
+        'completed': true,
+        'completedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('ResumeService: clearForStory failed: $e');
     }
   }
 }
